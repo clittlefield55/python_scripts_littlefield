@@ -4,6 +4,7 @@ from gpiozero import Button
 from PIL import Image, ImageDraw
 import os
 import shutil
+import time
 
 def write_frame(path, frame_number):
 	frame_file = open(path, 'w')
@@ -14,18 +15,18 @@ def write_frame(path, frame_number):
 def initialize_frame_file():
 	if not os.path.exists(os.path.dirname('/home/pi/Animation/anim/')):
 		os.mkdir(os.path.dirname('/home/pi/Animation/'))
-		os.chmod('/home/pi/Animation/', 777)
+		os.chmod('/home/pi/Animation/', 0o777)
 		os.mkdir(os.path.dirname('/home/pi/Animation/anim/'))
-		os.chmod('/home/pi/Animation/anim', 777)
+		os.chmod('/home/pi/Animation/anim', 0o777)
 		os.mkdir(os.path.dirname('/home/pi/Animation/frame/'))
-		os.chmod('/home/pi/Animation/frame', 777)
+		os.chmod('/home/pi/Animation/frame', 0o777)
 	frame_file = open(frame_file_path, 'w+')
+	os.chmod(frame_file_path, 0o777)
 	frame = 0
 	prevframe = 0
-	frame_file.write(str(frame))
+	frame_file.write(str(0))
 	frame_file.flush()
 	frame_file.close()
-	os.chmod(frame_file_path, 777)
 
 capture_button = Button(21)
 reset_button = Button(20)
@@ -63,21 +64,28 @@ while True:
 				pass
 
 		prevframe = frame
-		camera.annotate_text = '%05d/10000' % frame
+		camera.annotate_text = '%04d/9999' % frame
 		if capture_button.is_pressed:
-			camera.annotate_text = ''
-			camera.capture('/home/pi/Animation/frame/frame%04d.jpg' % frame, use_video_port = True, resize=(2592, 1458))
-			sleep(1)
-			frame += 1
-			if frame > 9999:
-				frame = 0
-			write_frame(frame_file_path, frame)
+			start_time = time.time()
+			capture_button.wait_for_release()
+			button_time = time.time() - start_time
+			if .1 <= button_time < 5:
+				camera.annotate_text = ''
+				camera.capture('/home/pi/Animation/frame/frame%04d.jpg' % frame, use_video_port = True, resize=(2592, 1458))
+				sleep(1)
+				frame += 1
+				if frame > 9999:
+					frame = 0
+				write_frame(frame_file_path, frame)
+			elif button_time >= 5:
+				os.system('sudo shutdown -h now')
 
 		if reset_button.is_pressed:
 			try:
 				camera.remove_overlay(o)
 			except Exception:
 				pass
+			frame = 0
 			shutil.rmtree('/home/pi/Animation')
 			initialize_frame_file()
 
